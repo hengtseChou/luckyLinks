@@ -1,3 +1,4 @@
+import logging
 import os
 import random
 
@@ -13,6 +14,10 @@ TOKEN = os.getenv("TG_TOKEN")
 MONGODB_URI = os.getenv("MONGODB_URI")
 PASSWORD = os.getenv("PASSWORD")
 
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+
 client = pymongo.MongoClient(MONGODB_URI, connect=False)
 db = client["db"]
 users_collection = db.users
@@ -23,6 +28,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user["id"]
     if not users_collection.find_one({"user_id": user_id}):
         users_collection.insert_one({"user_id": user_id, "status": "unverified"})
+        logging.info(f"New user joined. (user id: {user_id})")
         await update.message.reply_text("Welcome to Lucky Links. Enter password to proceed.")
     else:
         await update.message.reply_text("The bot has already started.")
@@ -37,6 +43,7 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if user:
             if password == PASSWORD:
                 users_collection.update_one({"user_id": user_id}, {"$set": {"status": "verified"}})
+                logging.info(f"New user verified. (user id: {user_id})")
                 await update.message.reply_text("Verification successful!")
             else:
                 await update.message.reply_text("Invalid password. Please try again.")
@@ -56,6 +63,7 @@ async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             if user.get("status") == "verified":
                 if link:
                     links_collection.insert_one({"user_id": user_id, "link": link})
+                    logging.info(f"New link added. (user id: {user_id})")
                     await update.message.reply_text("Link added successfully.")
                 else:
                     await update.message.reply_text("Please provide a link.")
@@ -82,6 +90,7 @@ async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             random_index = random.randint(0, count - 1)
             link = links_collection.find({"user_id": user_id}).skip(random_index).limit(1).next()
+            logging.info(f"Lucky link generated. (user id: {user_id})")
             await update.message.reply_text(link["link"])
         else:
             await update.message.reply_text(
