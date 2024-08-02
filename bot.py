@@ -78,7 +78,7 @@ async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "You need to be verified to add links. Please use /verify <password> first."
         )
         return
-    
+
     link = link = context.args[0] if context.args else None
     if link is None:
         await update.message.reply_text("Please provide a link.")
@@ -102,7 +102,7 @@ async def del_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "You need to be verified to delete links. Please use /verify <password> first."
         )
         return
-    
+
     link = link = context.args[0] if context.args else None
     if link is None:
         await update.message.reply_text("Please provide a link.")
