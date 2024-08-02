@@ -33,7 +33,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logging.info(f"New user joined. (user id: {user_id})")
         await update.message.reply_text("Welcome to Lucky Links. Enter password to proceed.")
     else:
-        await update.message.reply_text("You already joined Lucky Links")
+        await update.message.reply_text("You already joined Lucky Links.")
 
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -103,6 +103,7 @@ async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
     help_text = (
         "Here are the commands you can use:\n\n"
         "/start - Join Lucky Links.\n"
@@ -111,6 +112,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/lucky - Receive a LUCKY link (available only to verified users).\n"
         "/help - Show this help message."
     )
+    logging.info(f"Help sent. (user id: {user_id})")
     await update.message.reply_text(help_text)
 
 
