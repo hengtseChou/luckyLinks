@@ -17,6 +17,8 @@ PASSWORD = os.getenv("PASSWORD")
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
+httpx_logger = logging.getLogger("httpx")
+httpx_logger.setLevel(logging.ERROR)
 
 client = pymongo.MongoClient(MONGODB_URI, connect=False)
 db = client["db"]
