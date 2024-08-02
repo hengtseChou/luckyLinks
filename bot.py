@@ -43,12 +43,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    try:
-        password = context.args[0] if context.args else None
-    except IndexError:
-        await update.message.reply_text("Please enter a password.")
-        return
-
     user_id = update.message.from_user["id"]
     user = users_collection.find_one({"user_id": user_id})
 
@@ -56,6 +50,14 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("You need to start the bot first using /start.")
         return
 
+    if user.get("status") == "verified":
+        await update.message.reply_text("You are already verified!")
+        return
+
+    password = context.args[0] if context.args else None
+    if password is None:
+        await update.message.reply_text("Please enter a password.")
+        return
     if password != PASSWORD:
         await update.message.reply_text("Invalid password. Please try again.")
         return
@@ -148,25 +150,18 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/verify <password> - Verify yourself.\n"
         "/new <link> - Add a new link (available only to verified users).\n"
         "/del <link> - Delete a specific link (available only to verified users).\n"
-        "/lucky - Receive a LUCKY link (available only to verified users).\n"
+        "/lucky - Receive a LUCKY LINK (available only to verified users).\n"
         "/help - Show this help message."
     )
-    logger.info(f"Help sent. (user id: {user_id})")
     await update.message.reply_text(help_text)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = update.message.text
-    user_id = update.message.from_user["id"]
-    logger.info(f"Msg: {text}. (user id: {user_id})")
     responses = ["You feeling LUCKY?", "Send me a LINK!"]
     await update.message.reply_text(random.choice(responses))
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = update.message.text
-    user_id = update.message.from_user["id"]
-    logger.info(f"Unknown command: {text}. (user id: {user_id})")
     await update.message.reply_text("Unknown command. Type /help for more info.")
 
 
