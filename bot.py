@@ -6,7 +6,7 @@ import pymongo
 import pymongo.collection
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 load_dotenv()
 
@@ -33,7 +33,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logging.info(f"New user joined. (user id: {user_id})")
         await update.message.reply_text("Welcome to Lucky Links. Enter password to proceed.")
     else:
-        await update.message.reply_text("The bot has already started.")
+        await update.message.reply_text("You already joined Lucky Links")
 
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -102,6 +102,33 @@ async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("You need to start the bot first using /start.")
 
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    help_text = (
+        "Here are the commands you can use:\n\n"
+        "/start - Join Lucky Links.\n"
+        "/verify <password> - Verify yourself.\n"
+        "/new <link> - Add a new link (available only to verified users).\n"
+        "/lucky - Receive a LUCKY link (available only to verified users).\n"
+        "/help - Show this help message."
+    )
+    await update.message.reply_text(help_text)
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = update.message.text
+    user_id = update.message.from_user.id
+    logging.info(f"Msg: {text}. (user id: {user_id})")
+    responses = ["You feeling LUCKY?", "Send me a LINK!"]
+    await update.message.reply_text(random.choice(responses))
+
+
+async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = update.message.text
+    user_id = update.message.from_user.id
+    logging.info(f"Unknown command: {text}. (user id: {user_id})")
+    await update.message.reply_text("Unknown command. Type /help for more info.")
+
+
 def main():
 
     app = ApplicationBuilder().token(TOKEN).build()
@@ -109,6 +136,9 @@ def main():
     app.add_handler(CommandHandler("verify", verify))
     app.add_handler(CommandHandler("new", new))
     app.add_handler(CommandHandler("lucky", lucky))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
     app.run_polling()
 
