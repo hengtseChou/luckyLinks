@@ -112,6 +112,7 @@ async def del_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     result = links_collection.delete_one({"user_id": user_id, "link": link})
     if result.deleted_count > 0:
+        logger.info(f"Link deleted. (user id: {user_id})")
         await update.message.reply_text("Link deleted successfully.")
     else:
         await update.message.reply_text("Link not found.")
