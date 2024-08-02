@@ -34,12 +34,12 @@ links_collection = db.links
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user["id"]
     if users_collection.find_one({"user_id": user_id}):
-        await update.message.reply_text("You already joined Lucky Links.")
+        await update.message.reply_text("You already joined LUCKY LINKS.")
         return
 
     users_collection.insert_one({"user_id": user_id, "status": "unverified"})
     logger.info(f"New user joined. (user id: {user_id})")
-    await update.message.reply_text("Welcome to Lucky Links. Enter password to proceed.")
+    await update.message.reply_text("Welcome to LUCKY LINKS. Enter password to proceed.")
 
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -146,7 +146,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     user_id = update.message.from_user["id"]
     help_text = (
         "Here are the commands you can use:\n\n"
-        "/start - Join Lucky Links.\n"
+        "/start - Join LUCKY LINKS.\n"
         "/verify <password> - Verify yourself.\n"
         "/new <link> - Add a new link (available only to verified users).\n"
         "/del <link> - Delete a specific link (available only to verified users).\n"
