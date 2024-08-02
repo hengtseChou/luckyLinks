@@ -66,12 +66,6 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    try:
-        link = context.args[0] if context.args else None
-    except IndexError:
-        await update.message.reply_text("Please provide a link.")
-        return
-
     user_id = update.message.from_user["id"]
     user = users_collection.find_one({"user_id": user_id})
 
@@ -84,6 +78,11 @@ async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "You need to be verified to add links. Please use /verify <password> first."
         )
         return
+    
+    link = link = context.args[0] if context.args else None
+    if link is None:
+        await update.message.reply_text("Please provide a link.")
+        return
 
     links_collection.insert_one({"user_id": user_id, "link": link})
     logger.info(f"New link added. (user id: {user_id})")
@@ -91,12 +90,6 @@ async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def del_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    try:
-        link = context.args[0] if context.args else None
-    except IndexError:
-        await update.message.reply_text("Please provide a link to delete.")
-        return
-
     user_id = update.message.from_user["id"]
     user = users_collection.find_one({"user_id": user_id})
 
@@ -108,6 +101,11 @@ async def del_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             "You need to be verified to delete links. Please use /verify <password> first."
         )
+        return
+    
+    link = link = context.args[0] if context.args else None
+    if link is None:
+        await update.message.reply_text("Please provide a link.")
         return
 
     result = links_collection.delete_one({"user_id": user_id, "link": link})
