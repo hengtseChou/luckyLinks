@@ -196,14 +196,14 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         message = update.effective_message.text or "Non-text message"
         error_message = (
             f"🚨 *Bot Error Alert* 🚨\n\n"
-            f"*Exception:* `{context.error}`\n"
-            f"*User:* [{first_name}](tg://user?id={user_id}) (ID: `{user_id}`)\n"
-            f"*Chat ID:* `{chat_id}`\n"
-            f"*Message Sent:* `{message}`\n"
+            f"*Exception: * `{context.error}`\n"
+            f"*User: * [{first_name}](tg://user?id={user_id}) (ID : `{user_id}`)\n"
+            f"*Chat ID: * `{chat_id}`\n"
+            f"*Message Sent: * `{message}`\n"
         )
     else:
         error_message = (
-            f"🚨 *Bot Error Alert* 🚨\n\n" f"*Exception:* `{context.error}`\n"
+            f"🚨 *Bot Error Alert* 🚨\n\n" f"*Exception :* `{context.error}`\n"
         )
     try:
         await context.bot.send_message(
