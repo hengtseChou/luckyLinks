@@ -178,31 +178,20 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text("Unknown command. Type /help for more info.")
 
 
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Exception occurred", exc_info=True)
-
-    # Extract the message content that caused the error
-    user_message = "No message content"
-    user_id = "Unknown"
-    first_name = "Unknown"
-
-    if isinstance(update, Update) and update.effective_message:
-        user_message = update.effective_message.text or "Non-text message"
-        user_id = update.effective_user.id if update.effective_user else "Unknown"
-        first_name = (
-            update.effective_user.first_name if update.effective_user else "Unknown"
+    if update and update.effective_message:
+        error_message = (
+            f"🚨 *Bot Error Alert* 🚨\n\n"
+            f"*Exception:* `{context.error}`\n"
+            f"*User:* [{update.effective_user.first_name}](tg://user?id={update.effective_user.id}) (ID: `{update.effective_user.id}`)\n"
+            f"*Chat ID:* `{update.effective_chat.id if update.effective_chat else 'Unknown'}`\n"
+            f"*Message Sent:* `{update.effective_message.text or "Non-text message"}`\n"
         )
-
-    # Prepare the error message to send to the developer
-    error_message = (
-        f"🚨 *Bot Error Alert* 🚨\n\n"
-        f"*Exception:* `{context.error}`\n"
-        f"*User:* [{first_name}](tg://user?id={user_id}) (ID: `{user_id}`)\n"
-        f"*Chat ID:* `{update.effective_chat.id if update.effective_chat else 'Unknown'}`\n"
-        f"*Message Sent:* `{user_message}`\n"
-    )
-
-    # Send the error message to the developer
+    else:
+        error_message = (
+            f"🚨 *Bot Error Alert* 🚨\n\n" f"*Exception:* `{context.error}`\n"
+        )
     try:
         await context.bot.send_message(
             chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode="Markdown"
