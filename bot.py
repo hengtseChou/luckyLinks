@@ -1,16 +1,19 @@
-import html
-import json
 import logging
 import os
 import random
-import traceback
 
 import pymongo
 import pymongo.collection
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.constants import ParseMode
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+from telegram.error import TelegramError
 
 load_dotenv()
 
@@ -39,7 +42,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     users_collection.insert_one({"user_id": user_id, "status": "unverified"})
     logger.info(f"New user joined. (user id: {user_id})")
-    await update.message.reply_text("Welcome to LUCKY LINKS. Enter password to proceed.")
+    await update.message.reply_text(
+        "Welcome to LUCKY LINKS. Enter password to proceed."
+    )
 
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -49,7 +54,6 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not user:
         await update.message.reply_text("You need to start the bot first using /start.")
         return
-
     if user.get("status") == "verified":
         await update.message.reply_text("You are already verified!")
         return
@@ -60,6 +64,7 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
     if password != PASSWORD:
         await update.message.reply_text("Invalid password. Please try again.")
+        logger.info(f"Invalid verification occurred. (user id: {user_id})")
         return
 
     users_collection.update_one({"user_id": user_id}, {"$set": {"status": "verified"}})
@@ -91,7 +96,7 @@ async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Link added successfully.")
 
 
-async def del_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user["id"]
     user = users_collection.find_one({"user_id": user_id})
 
@@ -138,23 +143,28 @@ async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     random_index = random.randint(0, count - 1)
-    link = links_collection.find({"user_id": user_id}).skip(random_index).limit(1).next()
+    link = (
+        links_collection.find({"user_id": user_id}).skip(random_index).limit(1).next()
+    )
     logger.info(f"Lucky link generated. (user id: {user_id})")
     await update.message.reply_text(link["link"])
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.message.from_user["id"]
     help_text = (
         "Here are the commands you can use:\n\n"
         "/start - Join LUCKY LINKS.\n"
         "/verify <password> - Verify yourself.\n"
         "/new <link> - Add a new link (available only to verified users).\n"
-        "/del <link> - Delete a specific link (available only to verified users).\n"
+        "/delete <link> - Delete a specific link (available only to verified users).\n"
         "/lucky - Receive a LUCKY LINK (available only to verified users).\n"
         "/help - Show this help message."
     )
     await update.message.reply_text(help_text)
+
+
+async def error_simulator(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    raise Exception("This is a simulated exception.")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -167,30 +177,36 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log the error and send a telegram message to notify the developer."""
-    # Log the error before we do anything else, so we can see it even if something breaks.
-    logger.error("Exception while handling an update:", exc_info=context.error)
+    logger.error("Exception occurred", exc_info=True)
 
-    # traceback.format_exception returns the usual python message about an exception, but as a
-    # list of strings rather than a single string, so we have to join them together.
-    tb_list = traceback.format_exception(None, context.error, context.error.__traceback__)
-    tb_string = "".join(tb_list)
+    # Extract the message content that caused the error
+    user_message = "No message content"
+    user_id = "Unknown"
+    first_name = "Unknown"
 
-    # Build the message with some markup and additional information about what happened.
-    # You might need to add some logic to deal with messages longer than the 4096 character limit.
-    update_str = update.to_dict() if isinstance(update, Update) else str(update)
-    message = (
-        "An exception was raised while handling an update\n"
-        f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}"
-        "</pre>\n\n"
-        f"<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n"
-        f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
-        f"<pre>{html.escape(tb_string)}</pre>"
+    if isinstance(update, Update) and update.effective_message:
+        user_message = update.effective_message.text or "Non-text message"
+        user_id = update.effective_user.id if update.effective_user else "Unknown"
+        first_name = (
+            update.effective_user.first_name if update.effective_user else "Unknown"
+        )
+
+    # Prepare the error message to send to the developer
+    error_message = (
+        f"🚨 *Bot Error Alert* 🚨\n\n"
+        f"*Exception:* `{context.error}`\n"
+        f"*User:* [{first_name}](tg://user?id={user_id}) (ID: `{user_id}`)\n"
+        f"*Chat ID:* `{update.effective_chat.id if update.effective_chat else 'Unknown'}`\n"
+        f"*Message Sent:* `{user_message}`\n"
     )
 
-    await context.bot.send_message(
-        chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.HTML
-    )
+    # Send the error message to the developer
+    try:
+        await context.bot.send_message(
+            chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode="Markdown"
+        )
+    except TelegramError as e:
+        logger.error(f"Failed to send error report: {e}")
 
 
 def main():
@@ -198,9 +214,10 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("verify", verify))
     app.add_handler(CommandHandler("new", new))
-    app.add_handler(CommandHandler("del", del_link))
+    app.add_handler(CommandHandler("delete", delete))
     app.add_handler(CommandHandler("lucky", lucky))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("error", error_simulator))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
