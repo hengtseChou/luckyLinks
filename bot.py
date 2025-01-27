@@ -169,11 +169,13 @@ async def error_simulator(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     responses = ["You feeling LUCKY?", "Send me a LINK!"]
-    await update.message.reply_text(random.choice(responses))
+    if update.message:
+        await update.message.reply_text(random.choice(responses))
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Unknown command. Type /help for more info.")
+    if update.message:
+        await update.message.reply_text("Unknown command. Type /help for more info.")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
