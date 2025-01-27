@@ -1,24 +1,18 @@
 import logging
 import os
 import random
+from contextlib import contextmanager
 
-import pymongo
-import pymongo.collection
 from dotenv import load_dotenv
+from pymongo import MongoClient
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
 from telegram.error import TelegramError
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 load_dotenv()
 
-TOKEN = os.getenv("TG_TOKEN")
-MONGODB_URI = os.getenv("MONGODB_URI")
+TG_TOKEN = os.getenv("TG_TOKEN")
+MONGO_URL = os.getenv("MONGO_URL")
 PASSWORD = os.getenv("PASSWORD")
 DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID")
 
@@ -28,100 +22,118 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-client = pymongo.MongoClient(MONGODB_URI, connect=False)
-db = client["db"]
-users_collection = db.users
-links_collection = db.links
+
+@contextmanager
+def mongo_connection():
+    """Context manager for handling MongoDB connections."""
+    client = MongoClient(MONGO_URL, maxPoolSize=10, minPoolSize=1)
+    try:
+        database = client["data"]  # Access the 'data' database
+        yield database  # Yield the database instance
+    finally:
+        client.close()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    if users_collection.find_one({"user_id": user_id}):
-        await update.effective_message.reply_text("You already joined LUCKY LINKS.")
-        return
 
-    users_collection.insert_one({"user_id": user_id, "status": "unverified"})
+    with mongo_connection() as db:
+        users = db.users
+        if users.find_one({"user_id": user_id}):
+            await update.effective_message.reply_text("You already joined LUCKY LINKS.")
+            return
+        users.insert_one({"user_id": user_id, "status": "unverified"})
+
     logger.info(f"New user joined. (user id: {user_id})")
-    await update.effective_message.reply_text(
-        "Welcome to LUCKY LINKS. Enter password to proceed."
-    )
+    await update.effective_message.reply_text("Welcome to LUCKY LINKS. Enter password to proceed.")
 
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    user = users_collection.find_one({"user_id": user_id})
 
-    if not user:
-        await update.effective_message.reply_text(
-            "You need to start the bot first using /start."
-        )
-        return
-    if user.get("status") == "verified":
-        await update.effective_message.reply_text("You are already verified!")
-        return
+    with mongo_connection() as db:
+        users = db.users
+        user = users.find_one({"user_id": user_id})
 
-    password = context.args[0] if context.args else None
-    if password is None:
-        await update.effective_message.reply_text("Please enter a password.")
-        return
-    if password != PASSWORD:
-        await update.effective_message.reply_text("Invalid password. Please try again.")
-        logger.info(f"Invalid verification occurred. (user id: {user_id})")
-        return
+        if not user:
+            await update.effective_message.reply_text(
+                "You need to start the bot first using /start."
+            )
+            return
+        if user.get("status") == "verified":
+            await update.effective_message.reply_text("You are already verified!")
+            return
 
-    users_collection.update_one({"user_id": user_id}, {"$set": {"status": "verified"}})
+        password = context.args[0] if context.args else None
+        if password is None:
+            await update.effective_message.reply_text("Please enter a password.")
+            return
+        if password != PASSWORD:
+            await update.effective_message.reply_text("Invalid password. Please try again.")
+            logger.info(f"Invalid verification occurred. (user id: {user_id})")
+            return
+
+        users.update_one({"user_id": user_id}, {"$set": {"status": "verified"}})
+
     logger.info(f"New user verified. (user id: {user_id})")
     await update.effective_message.reply_text("Verification successful!")
 
 
 async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    user = users_collection.find_one({"user_id": user_id})
+    with mongo_connection() as db:
+        users = db.users
+        user = users.find_one({"user_id": user_id})
 
-    if not user:
-        await update.effective_message.reply_text(
-            "You need to start the bot first using /start."
-        )
-        return
+        if not user:
+            await update.effective_message.reply_text(
+                "You need to start the bot first using /start."
+            )
+            return
 
-    if user.get("status") != "verified":
-        await update.effective_message.reply_text(
-            "You need to be verified to add links. Please use /verify <password> first."
-        )
-        return
+        if user.get("status") != "verified":
+            await update.effective_message.reply_text(
+                "You need to be verified to add links. Please use /verify <password> first."
+            )
+            return
 
-    link = link = context.args[0] if context.args else None
-    if link is None:
-        await update.effective_message.reply_text("Please provide a link.")
-        return
+        link = context.args[0] if context.args else None
+        if link is None:
+            await update.effective_message.reply_text("Please provide a link.")
+            return
+        links = db.links
+        links.insert_one({"user_id": user_id, "link": link})
 
-    links_collection.insert_one({"user_id": user_id, "link": link})
     logger.info(f"New link added. (user id: {user_id})")
     await update.effective_message.reply_text("Link added successfully.")
 
 
 async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    user = users_collection.find_one({"user_id": user_id})
 
-    if not user:
-        await update.effective_message.reply_text(
-            "You need to start the bot first using /start."
-        )
-        return
+    with mongo_connection() as db:
+        users = db.users
+        user = users.find_one({"user_id": user_id})
 
-    if user.get("status") != "verified":
-        await update.effective_message.reply_text(
-            "You need to be verified to delete links. Please use /verify <password> first."
-        )
-        return
+        if not user:
+            await update.effective_message.reply_text(
+                "You need to start the bot first using /start."
+            )
+            return
 
-    link = link = context.args[0] if context.args else None
-    if link is None:
-        await update.effective_message.reply_text("Please provide a link.")
-        return
+        if user.get("status") != "verified":
+            await update.effective_message.reply_text(
+                "You need to be verified to delete links. Please use /verify <password> first."
+            )
+            return
 
-    result = links_collection.delete_one({"user_id": user_id, "link": link})
+        link = context.args[0] if context.args else None
+        if link is None:
+            await update.effective_message.reply_text("Please provide a link.")
+            return
+        links = db.links
+        result = links.delete_one({"user_id": user_id, "link": link})
+
     if result.deleted_count > 0:
         logger.info(f"Link deleted. (user id: {user_id})")
         await update.effective_message.reply_text("Link deleted successfully.")
@@ -131,29 +143,30 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    user = users_collection.find_one({"user_id": user_id})
+    with mongo_connection() as db:
+        users = db.users
+        user = users.find_one({"user_id": user_id})
 
-    if not user:
-        await update.effective_message.reply_text(
-            "You need to start the bot first using /start."
-        )
-        return
+        if not user:
+            await update.effective_message.reply_text(
+                "You need to start the bot first using /start."
+            )
+            return
 
-    if user.get("status") != "verified":
-        await update.effective_message.reply_text(
-            "You need to be verified to use this command. Please use /verify <password> first."
-        )
-        return
+        if user.get("status") != "verified":
+            await update.effective_message.reply_text(
+                "You need to be verified to use this command. Please use /verify <password> first."
+            )
+            return
 
-    count = links_collection.count_documents({"user_id": user_id})
-    if count == 0:
-        await update.effective_message.reply_text("You have no links saved.")
-        return
+        links = db.links
+        count = links.count_documents({"user_id": user_id})
+        if count == 0:
+            await update.effective_message.reply_text("You have no links saved.")
+            return
 
-    random_index = random.randint(0, count - 1)
-    link = (
-        links_collection.find({"user_id": user_id}).skip(random_index).limit(1).next()
-    )
+        random_index = random.randint(0, count - 1)
+        link = links.find({"user_id": user_id}).skip(random_index).limit(1).next()
     logger.info(f"Lucky link generated. (user id: {user_id})")
     await update.effective_message.reply_text(link["link"])
 
@@ -181,9 +194,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.effective_message.reply_text(
-        "Unknown command. Type /help for more info."
-    )
+    await update.effective_message.reply_text("Unknown command. Type /help for more info.")
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -202,9 +213,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"*Message Sent: * `{message}`\n"
         )
     else:
-        error_message = (
-            f"🚨 *Bot Error Alert* 🚨\n\n" f"*Exception :* `{context.error}`\n"
-        )
+        error_message = f"🚨 *Bot Error Alert* 🚨\n\n" f"*Exception :* `{context.error}`\n"
     try:
         await context.bot.send_message(
             chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode="Markdown"
@@ -214,7 +223,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = ApplicationBuilder().token(TG_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("verify", verify))
     app.add_handler(CommandHandler("new", new))
