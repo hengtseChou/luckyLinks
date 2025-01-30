@@ -267,7 +267,7 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             message = f"*These links are FEELING LUCKY:* \n\n"
             results = links.find({"user_id": user_id, "link": {"$regex": regex_pattern}})
             for doc in results:
-                message += f"- {doc['link']}\n"
+                message += f"- `{doc['link']}`\n"
             await update.effective_message.reply_text(text=message, parse_mode="Markdown")
 
 
