@@ -237,12 +237,13 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         links = db.links
         regex_pattern = re.compile(search_term, re.IGNORECASE)
-        results = links.find({"user_id": user_id, "link": {"$regex": regex_pattern}})
-        if results.count() == 0:
+        count = links.count_documents({"user_id": user_id, "link": {"$regex": regex_pattern}})
+        if count == 0:
             await update.effective_message.reply_text("No matching links found.")
             return
         else:
             message = f"*THESE links are lucky:* \n\n"
+            results = links.find({"user_id": user_id, "link": {"$regex": regex_pattern}})
             for doc in results:
                 message += f"{doc['link']}\n"
             await update.effective_message.reply_text(message)
