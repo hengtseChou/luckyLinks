@@ -7,14 +7,9 @@ from contextlib import contextmanager
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.error import TelegramError
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 load_dotenv()
 
@@ -57,7 +52,7 @@ async def handle_invalid_attempt(
             f"*Message Sent*: {update.effective_message.text or "Non-text message"}\n"
         )
         await context.bot.send_message(
-            chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode="Markdown"
+            chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.MARKDOWN
         )
     elif attempt_type == "failed_verification":
         await update.effective_message.reply_text("Invalid password. Please try again.")
@@ -68,7 +63,7 @@ async def handle_invalid_attempt(
             f"*Message Sent*: {update.effective_message.text or "Non-text message"}\n"
         )
         await context.bot.send_message(
-            chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode="Markdown"
+            chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.MARKDOWN
         )
 
 
@@ -89,7 +84,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_message(
         chat_id=DEVELOPER_CHAT_ID,
         text=f"New user ([{update.effective_user.first_name}](tg://user?id={user_id})) joined LUCKY LINKS.",
-        parse_mode="Markdown",
+        parse_mode=ParseMode.MARKDOWN,
     )
 
 
@@ -267,8 +262,8 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             message = f"*These links are FEELING LUCKY:* \n\n"
             results = links.find({"user_id": user_id, "link": {"$regex": regex_pattern}})
             for doc in results:
-                message += f"- `{doc['link']}`\n"
-            await update.effective_message.reply_text(text=message, parse_mode="Markdown")
+                message += f"• {doc['link']}\n"
+            await update.effective_message.reply_text(text=message, parse_mode=ParseMode.MARKDOWN)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -316,7 +311,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         error_message = f"🚨 *Bot Error Alert* 🚨\n\n" f"*Exception :* `{context.error}`\n"
     try:
         await context.bot.send_message(
-            chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode="Markdown"
+            chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode=ParseMode.MARKDOWN
         )
     except TelegramError as e:
         logger.error(f"Failed to send error report: {e}")
