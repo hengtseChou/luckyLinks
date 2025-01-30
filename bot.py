@@ -242,7 +242,7 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text("No matching links found.")
             return
         else:
-            message = f"*Matching links:* \n\n"
+            message = f"*THESE links are lucky:* \n\n"
             for doc in results:
                 message += f"{doc['link']}\n"
             await update.effective_message.reply_text(message)
@@ -257,6 +257,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/delete <link> - Delete a specific link (available only to verified users).\n"
         "/lucky - Receive a LUCKY LINK (available only to verified users).\n"
         "/dedup - Delete duplicate links (available only to verified users).\n"
+        "/search <keyword> - Search for links containing a keyword (available only to verified users).\n"
         "/help - Show this help message."
     )
     await update.effective_message.reply_text(help_text)
@@ -308,6 +309,7 @@ def main():
     app.add_handler(CommandHandler("delete", delete))
     app.add_handler(CommandHandler("lucky", lucky))
     app.add_handler(CommandHandler("dedup", dedup))
+    app.add_handler(CommandHandler("search", search))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("error", error_simulator))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
