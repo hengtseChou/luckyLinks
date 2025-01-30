@@ -28,8 +28,8 @@ def mongo_connection():
     """Context manager for handling MongoDB connections."""
     client = MongoClient(MONGO_URL, maxPoolSize=10, minPoolSize=1)
     try:
-        database = client["data"]  # Access the 'data' database
-        yield database  # Yield the database instance
+        database = client["data"]
+        yield database
     finally:
         client.close()
 
@@ -54,7 +54,6 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with mongo_connection() as db:
         users = db.users
         user = users.find_one({"user_id": user_id})
-
         if not user:
             await update.effective_message.reply_text(
                 "You need to start the bot first using /start."
@@ -81,16 +80,15 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
+
     with mongo_connection() as db:
         users = db.users
         user = users.find_one({"user_id": user_id})
-
         if not user:
             await update.effective_message.reply_text(
                 "You need to start the bot first using /start."
             )
             return
-
         if user.get("status") != "verified":
             await update.effective_message.reply_text(
                 "You need to be verified to add links. Please use /verify <password> first."
@@ -114,13 +112,11 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     with mongo_connection() as db:
         users = db.users
         user = users.find_one({"user_id": user_id})
-
         if not user:
             await update.effective_message.reply_text(
                 "You need to start the bot first using /start."
             )
             return
-
         if user.get("status") != "verified":
             await update.effective_message.reply_text(
                 "You need to be verified to delete links. Please use /verify <password> first."
@@ -143,16 +139,15 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
+
     with mongo_connection() as db:
         users = db.users
         user = users.find_one({"user_id": user_id})
-
         if not user:
             await update.effective_message.reply_text(
                 "You need to start the bot first using /start."
             )
             return
-
         if user.get("status") != "verified":
             await update.effective_message.reply_text(
                 "You need to be verified to use this command. Please use /verify <password> first."
@@ -171,6 +166,52 @@ async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(link["link"])
 
 
+async def dedup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+
+    with mongo_connection() as db:
+        users = db.users
+        user = users.find_one({"user_id": user_id})
+        if not user:
+            await update.effective_message.reply_text(
+                "You need to start the bot first using /start."
+            )
+            return
+        if user.get("status") != "verified":
+            await update.effective_message.reply_text(
+                "You need to be verified to use this command. Please use /verify <password> first."
+            )
+            return
+
+        links = db.links
+        pipeline = [
+            {"$match": {"user_id": user_id}},
+            {
+                "$group": {
+                    "_id": "$link",
+                    "count": {"$sum": 1},
+                    "doc_ids": {"$push": "$_id"},
+                }
+            },
+            {"$match": {"count": {"$gt": 1}}},
+        ]
+        duplicates = links.aggregate(pipeline)
+        deleted = 0
+        for dup in duplicates:
+            doc_ids = dup["doc_ids"]
+            ids_to_remove = doc_ids[1:]
+            if ids_to_remove:
+                result = links.delete_many({"_id": {"$in": ids_to_remove}})
+                deleted += result.deleted_count
+        remaining = links.count_documents({"user_id": user_id})
+    logger.info(
+        f"Dedup completed. Deleted {deleted} entries. Keeping {remaining} entries. (user id: {user_id})"
+    )
+    await update.effective_message.reply_text(
+        f"Deleted duplicates: {deleted}. Remaining links: {remaining}."
+    )
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     help_text = (
         "Here are the commands you can use:\n\n"
@@ -179,6 +220,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/new <link> - Add a new link (available only to verified users).\n"
         "/delete <link> - Delete a specific link (available only to verified users).\n"
         "/lucky - Receive a LUCKY LINK (available only to verified users).\n"
+        "/dedup - Delete duplicate links (available only to verified users).\n"
         "/help - Show this help message."
     )
     await update.effective_message.reply_text(help_text)
@@ -229,13 +271,12 @@ def main():
     app.add_handler(CommandHandler("new", new))
     app.add_handler(CommandHandler("delete", delete))
     app.add_handler(CommandHandler("lucky", lucky))
+    app.add_handler(CommandHandler("dedup", dedup))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("error", error_simulator))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
-
     app.add_error_handler(error_handler)
-
     app.run_polling()
 
 
