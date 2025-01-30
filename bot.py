@@ -8,7 +8,13 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from telegram import Update
 from telegram.error import TelegramError
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 load_dotenv()
 
@@ -35,6 +41,37 @@ def mongo_connection():
         client.close()
 
 
+async def handle_invalid_attempt(
+    update: Update, attempt_type: str, context: ContextTypes.DEFAULT_TYPE = None
+) -> None:
+    if attempt_type == "not_started":
+        await update.effective_message.reply_text("You need to start the bot first using /start.")
+    elif attempt_type == "not_verified":
+        await update.effective_message.reply_text(
+            "You need to be verified to use this command. Please use /verify <password> first."
+        )
+        message = (
+            f"*Someone is UNLUCKY...*\n\n"
+            f"*Type*: Failed attempt to use advanced commands.\n"
+            f"*User*: [{update.effective_user.first_name}](tg://user?id={update.effective_user.id})\n"
+            f"*Message Sent*: {update.effective_message.text or "Non-text message"}\n"
+        )
+        await context.bot.send_message(
+            chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode="Markdown"
+        )
+    elif attempt_type == "failed_verification":
+        await update.effective_message.reply_text("Invalid password. Please try again.")
+        message = (
+            f"*Someone is UNLUCKY...*\n\n"
+            f"*Type*: Invalid Verification\n"
+            f"*User*: [{update.effective_user.first_name}](tg://user?id={update.effective_user.id})\n"
+            f"*Message Sent*: {update.effective_message.text or "Non-text message"}\n"
+        )
+        await context.bot.send_message(
+            chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode="Markdown"
+        )
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
 
@@ -46,7 +83,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         users.insert_one({"user_id": user_id, "status": "unverified"})
 
     logger.info(f"New user joined. (user id: {user_id})")
-    await update.effective_message.reply_text("Welcome to LUCKY LINKS. Enter password to proceed.")
+    await update.effective_message.reply_text(
+        "Welcome to LUCKY LINKS. Please use /verify <password> to proceed."
+    )
+    await context.bot.send_message(
+        chat_id=DEVELOPER_CHAT_ID,
+        text=f"New user ([{update.effective_user.first_name}](tg://user?id={user_id})) joined LUCKY LINKS.",
+        parse_mode="Markdown",
+    )
 
 
 async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -56,9 +100,7 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         users = db.users
         user = users.find_one({"user_id": user_id})
         if not user:
-            await update.effective_message.reply_text(
-                "You need to start the bot first using /start."
-            )
+            await handle_invalid_attempt(update, "not_started")
             return
         if user.get("status") == "verified":
             await update.effective_message.reply_text("You are already verified!")
@@ -69,7 +111,7 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text("Please enter a password.")
             return
         if password != PASSWORD:
-            await update.effective_message.reply_text("Invalid password. Please try again.")
+            await handle_invalid_attempt(update, "failed_verification", context)
             logger.info(f"Invalid verification occurred. (user id: {user_id})")
             return
 
@@ -86,14 +128,10 @@ async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         users = db.users
         user = users.find_one({"user_id": user_id})
         if not user:
-            await update.effective_message.reply_text(
-                "You need to start the bot first using /start."
-            )
+            await handle_invalid_attempt(update, "not_started")
             return
         if user.get("status") != "verified":
-            await update.effective_message.reply_text(
-                "You need to be verified to add links. Please use /verify <password> first."
-            )
+            await handle_invalid_attempt(update, "not_verified", context)
             return
 
         link = context.args[0] if context.args else None
@@ -114,14 +152,10 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         users = db.users
         user = users.find_one({"user_id": user_id})
         if not user:
-            await update.effective_message.reply_text(
-                "You need to start the bot first using /start."
-            )
+            await handle_invalid_attempt(update, "not_started")
             return
         if user.get("status") != "verified":
-            await update.effective_message.reply_text(
-                "You need to be verified to delete links. Please use /verify <password> first."
-            )
+            await handle_invalid_attempt(update, "not_verified", context)
             return
 
         link = context.args[0] if context.args else None
@@ -145,14 +179,10 @@ async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         users = db.users
         user = users.find_one({"user_id": user_id})
         if not user:
-            await update.effective_message.reply_text(
-                "You need to start the bot first using /start."
-            )
+            await handle_invalid_attempt(update, "not_started")
             return
         if user.get("status") != "verified":
-            await update.effective_message.reply_text(
-                "You need to be verified to use this command. Please use /verify <password> first."
-            )
+            await handle_invalid_attempt(update, "not_verified", context)
             return
 
         links = db.links
@@ -174,14 +204,10 @@ async def dedup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         users = db.users
         user = users.find_one({"user_id": user_id})
         if not user:
-            await update.effective_message.reply_text(
-                "You need to start the bot first using /start."
-            )
+            await handle_invalid_attempt(update, "not_started")
             return
         if user.get("status") != "verified":
-            await update.effective_message.reply_text(
-                "You need to be verified to use this command. Please use /verify <password> first."
-            )
+            await handle_invalid_attempt(update, "not_verified", context)
             return
 
         links = db.links
@@ -220,14 +246,10 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         users = db.users
         user = users.find_one({"user_id": user_id})
         if not user:
-            await update.effective_message.reply_text(
-                "You need to start the bot first using /start."
-            )
+            await handle_invalid_attempt(update, "not_started")
             return
         if user.get("status") != "verified":
-            await update.effective_message.reply_text(
-                "You need to be verified to add links. Please use /verify <password> first."
-            )
+            await handle_invalid_attempt(update, "not_verified", context)
             return
 
         search_term = context.args[0] if context.args else None
@@ -242,11 +264,11 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text("No matching links found.")
             return
         else:
-            message = f"*THESE links are lucky:* \n\n"
+            message = f"*These links are FEELING LUCKY:* \n\n"
             results = links.find({"user_id": user_id, "link": {"$regex": regex_pattern}})
             for doc in results:
-                message += f"{doc['link']}\n"
-            await update.effective_message.reply_text(message)
+                message += f"- {doc['link']}\n"
+            await update.effective_message.reply_text(text=message, parse_mode="Markdown")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -278,8 +300,6 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error("Exception occurred", exc_info=True)
-
     if update and update.effective_message:
         user_id = update.effective_user.id
         first_name = update.effective_user.first_name
@@ -288,7 +308,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         error_message = (
             f"🚨 *Bot Error Alert* 🚨\n\n"
             f"*Exception: * `{context.error}`\n"
-            f"*User: * [{first_name}](tg://user?id={user_id}) (ID : `{user_id}`)\n"
+            f"*User: * [{first_name}](tg://user?id={user_id})\n"
             f"*Chat ID: * `{chat_id}`\n"
             f"*Message Sent: * `{message}`\n"
         )
