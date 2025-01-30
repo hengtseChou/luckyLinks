@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import re
 from contextlib import contextmanager
 
 from dotenv import load_dotenv
@@ -210,6 +211,41 @@ async def dedup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
         f"Deleted duplicates: {deleted}. Remaining links: {remaining}."
     )
+
+
+async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+
+    with mongo_connection() as db:
+        users = db.users
+        user = users.find_one({"user_id": user_id})
+        if not user:
+            await update.effective_message.reply_text(
+                "You need to start the bot first using /start."
+            )
+            return
+        if user.get("status") != "verified":
+            await update.effective_message.reply_text(
+                "You need to be verified to add links. Please use /verify <password> first."
+            )
+            return
+
+        search_term = context.args[0] if context.args else None
+        if search_term is None:
+            await update.effective_message.reply_text("Please provide a keyword to search.")
+            return
+
+        links = db.links
+        regex_pattern = re.compile(search_term, re.IGNORECASE)
+        results = links.find({"user_id": user_id, "link": {"$regex": regex_pattern}})
+        if results.count() == 0:
+            await update.effective_message.reply_text("No matching links found.")
+            return
+        else:
+            message = f"*Matching links:* \n\n"
+            for doc in results:
+                message += f"{doc['link']}\n"
+            await update.effective_message.reply_text(message)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
