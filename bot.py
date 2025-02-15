@@ -83,7 +83,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     await context.bot.send_message(
         chat_id=DEVELOPER_CHAT_ID,
-        text=f"New user ([{update.effective_user.first_name}](tg://user?id={user_id})) joined LUCKY LINKS.",
+        text=f"[{update.effective_user.full_name}](tg://user?id={user_id}) joined LUCKY LINKS.",
         parse_mode=ParseMode.MARKDOWN,
     )
 
