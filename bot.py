@@ -5,9 +5,8 @@ import re
 from contextlib import contextmanager
 
 from dotenv import load_dotenv
-from flask import Flask, request
 from pymongo import MongoClient
-from telegram import Bot, Update
+from telegram import Update
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
@@ -84,7 +83,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     await context.bot.send_message(
         chat_id=DEVELOPER_CHAT_ID,
-        text=f"New user ([{update.effective_user.first_name}](tg://user?id={user_id})) joined LUCKY LINKS.",
+        text=f"[{update.effective_user.full_name}](tg://user?id={user_id}) joined LUCKY LINKS.",
         parse_mode=ParseMode.MARKDOWN,
     )
 
@@ -318,29 +317,22 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.error(f"Failed to send error report: {e}")
 
 
-app = ApplicationBuilder().token(TG_TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("verify", verify))
-app.add_handler(CommandHandler("new", new))
-app.add_handler(CommandHandler("delete", delete))
-app.add_handler(CommandHandler("lucky", lucky))
-app.add_handler(CommandHandler("dedup", dedup))
-app.add_handler(CommandHandler("search", search))
-app.add_handler(CommandHandler("help", help_command))
-app.add_handler(CommandHandler("error", error_simulator))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
-app.add_error_handler(error_handler)
-
-server = Flask(__name__)
-
-
-@server.route("/webhook", methods=["POST"])
-async def webhook():
-    update = Update.de_json(data=request.json, bot=app.bot)
-    await app.update_queue.put(update)
-    return "OK", 200
+def main():
+    app = ApplicationBuilder().token(TG_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("verify", verify))
+    app.add_handler(CommandHandler("new", new))
+    app.add_handler(CommandHandler("delete", delete))
+    app.add_handler(CommandHandler("lucky", lucky))
+    app.add_handler(CommandHandler("dedup", dedup))
+    app.add_handler(CommandHandler("search", search))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("error", error_simulator))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
+    app.add_error_handler(error_handler)
+    app.run_polling()
 
 
 if __name__ == "__main__":
-    server.run()
+    main()
