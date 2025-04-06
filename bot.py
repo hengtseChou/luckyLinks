@@ -13,21 +13,21 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
-load_dotenv()
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 
-server = Flask(__name__)
-bot = Bot(token="YOUR_BOT_TOKEN")
+load_dotenv()
 
 TG_TOKEN = os.getenv("TG_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 PASSWORD = os.getenv("PASSWORD")
 DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID")
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
+server = Flask(__name__)
+bot = Bot(token=TG_TOKEN)
 
 
 @contextmanager
