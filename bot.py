@@ -5,13 +5,17 @@ import re
 from contextlib import contextmanager
 
 from dotenv import load_dotenv
+from flask import Flask, request
 from pymongo import MongoClient
-from telegram import Update
+from telegram import Bot, Update
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 load_dotenv()
+
+server = Flask(__name__)
+bot = Bot(token="YOUR_BOT_TOKEN")
 
 TG_TOKEN = os.getenv("TG_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
@@ -317,22 +321,28 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.error(f"Failed to send error report: {e}")
 
 
-def main():
-    app = ApplicationBuilder().token(TG_TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("verify", verify))
-    app.add_handler(CommandHandler("new", new))
-    app.add_handler(CommandHandler("delete", delete))
-    app.add_handler(CommandHandler("lucky", lucky))
-    app.add_handler(CommandHandler("dedup", dedup))
-    app.add_handler(CommandHandler("search", search))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("error", error_simulator))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
-    app.add_error_handler(error_handler)
-    app.run_polling()
+app = ApplicationBuilder().token(TG_TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("verify", verify))
+app.add_handler(CommandHandler("new", new))
+app.add_handler(CommandHandler("delete", delete))
+app.add_handler(CommandHandler("lucky", lucky))
+app.add_handler(CommandHandler("dedup", dedup))
+app.add_handler(CommandHandler("search", search))
+app.add_handler(CommandHandler("help", help_command))
+app.add_handler(CommandHandler("error", error_simulator))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
+app.add_error_handler(error_handler)
+
+
+@server.route("/webhook", methods=["POST"])
+def webhook():
+    json_str = request.get_data().decode("UTF-8")
+    update = Update.de_json(json_str, bot)
+    app.update_queue.put(update)
+    return "OK", 200
 
 
 if __name__ == "__main__":
-    main()
+    server.run()
