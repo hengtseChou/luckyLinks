@@ -1,9 +1,9 @@
+import json
 import logging
 import os
 import random
 import re
 from contextlib import contextmanager
-import json
 
 from dotenv import load_dotenv
 from flask import Flask, request
@@ -344,7 +344,7 @@ def webhook():
         data = json.loads(json_str)
     except json.JSONDecodeError:
         return "Invalid JSON", 400
-    update = Update.de_json(json_str, bot)
+    update = Update.de_json(data, bot)
     app.update_queue.put(update)
     return "OK", 200
 
