@@ -342,6 +342,7 @@ async def webhook():
     json_str = request.get_data().decode("UTF-8")
     try:
         data = json.loads(json_str)
+        logger.info(f"Received update: {data}")
     except json.JSONDecodeError:
         return "Invalid JSON", 400
     update = Update.de_json(data, bot)
