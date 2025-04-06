@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import random
@@ -13,12 +12,6 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
-
 load_dotenv()
 
 TG_TOKEN = os.getenv("TG_TOKEN")
@@ -26,8 +19,11 @@ MONGO_URL = os.getenv("MONGO_URL")
 PASSWORD = os.getenv("PASSWORD")
 DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID")
 
-server = Flask(__name__)
-bot = Bot(token=TG_TOKEN)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -336,16 +332,12 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 app.add_error_handler(error_handler)
 
+server = Flask(__name__)
+
 
 @server.route("/webhook", methods=["POST"])
 async def webhook():
-    json_str = request.get_data().decode("UTF-8")
-    try:
-        data = json.loads(json_str)
-        logger.info(f"Received update: {data}")
-    except json.JSONDecodeError:
-        return "Invalid JSON", 400
-    update = Update.de_json(data, bot)
+    update = Update.de_json(data=request.json, bot=app.bot)
     await app.update_queue.put(update)
     return "OK", 200
 
