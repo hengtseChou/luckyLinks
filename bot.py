@@ -338,14 +338,14 @@ app.add_error_handler(error_handler)
 
 
 @server.route("/webhook", methods=["POST"])
-def webhook():
+async def webhook():
     json_str = request.get_data().decode("UTF-8")
     try:
         data = json.loads(json_str)
     except json.JSONDecodeError:
         return "Invalid JSON", 400
     update = Update.de_json(data, bot)
-    app.update_queue.put(update)
+    await app.update_queue.put(update)
     return "OK", 200
 
 
