@@ -3,6 +3,7 @@ import os
 import random
 import re
 from contextlib import contextmanager
+import json
 
 from dotenv import load_dotenv
 from flask import Flask, request
@@ -339,6 +340,10 @@ app.add_error_handler(error_handler)
 @server.route("/webhook", methods=["POST"])
 def webhook():
     json_str = request.get_data().decode("UTF-8")
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError:
+        return "Invalid JSON", 400
     update = Update.de_json(json_str, bot)
     app.update_queue.put(update)
     return "OK", 200
