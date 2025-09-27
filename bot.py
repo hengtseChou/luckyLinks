@@ -2,7 +2,9 @@ import logging
 import os
 import random
 import re
+import sys
 from contextlib import contextmanager
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from pymongo import MongoClient
@@ -11,6 +13,7 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
+### Config ###
 load_dotenv()
 
 TG_TOKEN = os.getenv("TG_TOKEN")
@@ -18,13 +21,8 @@ MONGO_URL = os.getenv("MONGO_URL")
 PASSWORD = os.getenv("PASSWORD")
 DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID")
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
 
-
+### Mongo Setup ###
 @contextmanager
 def mongo_connection():
     """Context manager for handling MongoDB connections."""
@@ -36,9 +34,38 @@ def mongo_connection():
         client.close()
 
 
-async def handle_invalid_attempt(
-    update: Update, attempt_type: str, context: ContextTypes.DEFAULT_TYPE = None
-) -> None:
+class MongoHandler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+
+    def emit(self, record):
+        log_entry = {
+            "level": record.levelname,
+            "message": record.getMessage(),
+            "timestamp": datetime.now(timezone.utc),
+        }
+        with mongo_connection() as db:
+            db.logs.insert_one(log_entry)
+
+
+### Logging Setup ###
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter("%(levelname)s - %(message)s")
+stream_handler = logging.StreamHandler(stream=sys.stdout)
+stream_handler.setLevel(logging.INFO)
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
+
+mongo_handler = MongoHandler(collection="logs")
+logger.addHandler(mongo_handler)
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+### Bot Handlers ###
+async def handle_invalid_attempt(update: Update, attempt_type: str, context: ContextTypes.DEFAULT_TYPE = None) -> None:
     if attempt_type == "not_started":
         await update.effective_message.reply_text("You need to start the bot first using /start.")
     elif attempt_type == "not_verified":
@@ -49,22 +76,18 @@ async def handle_invalid_attempt(
             f"*Someone is UNLUCKY...*\n\n"
             f"*Type*: Failed attempt to use advanced commands.\n"
             f"*User*: [{update.effective_user.first_name}](tg://user?id={update.effective_user.id})\n"
-            f"*Message Sent*: {update.effective_message.text or "Non-text message"}\n"
+            f"*Message Sent*: {update.effective_message.text or 'Non-text message'}\n"
         )
-        await context.bot.send_message(
-            chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.MARKDOWN
-        )
+        await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.MARKDOWN)
     elif attempt_type == "failed_verification":
         await update.effective_message.reply_text("Invalid password. Please try again.")
         message = (
             f"*Someone is UNLUCKY...*\n\n"
             f"*Type*: Invalid Verification\n"
             f"*User*: [{update.effective_user.first_name}](tg://user?id={update.effective_user.id})\n"
-            f"*Message Sent*: {update.effective_message.text or "Non-text message"}\n"
+            f"*Message Sent*: {update.effective_message.text or 'Non-text message'}\n"
         )
-        await context.bot.send_message(
-            chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.MARKDOWN
-        )
+        await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.MARKDOWN)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -78,9 +101,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         users.insert_one({"user_id": user_id, "status": "unverified"})
 
     logger.info(f"New user joined. (user id: {user_id})")
-    await update.effective_message.reply_text(
-        "Welcome to LUCKY LINKS. Please use /verify <password> to proceed."
-    )
+    await update.effective_message.reply_text("Welcome to LUCKY LINKS. Please use /verify <password> to proceed.")
     await context.bot.send_message(
         chat_id=DEVELOPER_CHAT_ID,
         text=f"[{update.effective_user.full_name}](tg://user?id={user_id}) joined LUCKY LINKS.",
@@ -226,12 +247,8 @@ async def dedup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 result = links.delete_many({"_id": {"$in": ids_to_remove}})
                 deleted += result.deleted_count
         remaining = links.count_documents({"user_id": user_id})
-    logger.info(
-        f"Dedup completed. Deleted {deleted} entries. Keeping {remaining} entries. (user id: {user_id})"
-    )
-    await update.effective_message.reply_text(
-        f"Deleted duplicates: {deleted}. Remaining links: {remaining}."
-    )
+    logger.info(f"Dedup completed. Deleted {deleted} entries. Keeping {remaining} entries. (user id: {user_id})")
+    await update.effective_message.reply_text(f"Deleted duplicates: {deleted}. Remaining links: {remaining}.")
 
 
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -259,7 +276,7 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text("No matching links found.")
             return
         else:
-            message = f"*These links are FEELING LUCKY:* \n\n"
+            message = "*These links are FEELING LUCKY:* \n\n"
             results = links.find({"user_id": user_id, "link": {"$regex": regex_pattern}})
             for doc in results:
                 message += f"• {doc['link']}\n"
@@ -308,11 +325,9 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"*Message Sent: * `{message}`\n"
         )
     else:
-        error_message = f"🚨 *Bot Error Alert* 🚨\n\n" f"*Exception :* `{context.error}`\n"
+        error_message = f"🚨 *Bot Error Alert* 🚨\n\n*Exception :* `{context.error}`\n"
     try:
-        await context.bot.send_message(
-            chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode=ParseMode.MARKDOWN
-        )
+        await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode=ParseMode.MARKDOWN)
     except TelegramError as e:
         logger.error(f"Failed to send error report: {e}")
 
