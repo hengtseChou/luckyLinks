@@ -34,22 +34,21 @@ def mongo_connection():
         client.close()
 
 
-class MongoHandler(logging.Handler):
-    def __init__(self):
-        super().__init__()
-
-    def emit(self, record):
-        log_entry = {
-            "level": record.levelname,
-            "message": record.getMessage(),
-            "timestamp": datetime.now(timezone.utc),
-        }
-        with mongo_connection() as db:
-            db.logs.insert_one(log_entry)
-
-
 ### Logging Setup ###
-logger = logging.getLogger(__name__)
+class MyLogger(logging.Logger):
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+
+    def info(self, msg, db, *args, **kwargs):
+        super().info(msg, *args, **kwargs)
+        db.logs.insert_one({"level": "INFO", "message": msg, "timestamp": datetime.now(timezone.utc)})
+
+    def error(self, msg, db, *args, **kwargs):
+        super().error(msg, *args, **kwargs)
+        db.logs.insert_one({"level": "ERROR", "message": msg, "timestamp": datetime.now(timezone.utc)})
+
+
+logger = MyLogger(__name__)
 logger.setLevel(logging.INFO)
 
 formatter = logging.Formatter("%(levelname)s - %(message)s")
@@ -57,9 +56,6 @@ stream_handler = logging.StreamHandler(stream=sys.stdout)
 stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
-
-mongo_handler = MongoHandler()
-logger.addHandler(mongo_handler)
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -99,8 +95,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text("You already joined LUCKY LINKS.")
             return
         users.insert_one({"user_id": user_id, "status": "unverified"})
+        logger.info(f"New user joined. (user id: {user_id})", db)
 
-    logger.info(f"New user joined. (user id: {user_id})")
     await update.effective_message.reply_text("Welcome to LUCKY LINKS. Please use /verify <password> to proceed.")
     await context.bot.send_message(
         chat_id=DEVELOPER_CHAT_ID,
@@ -132,8 +128,8 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
 
         users.update_one({"user_id": user_id}, {"$set": {"status": "verified"}})
+        logger.info(f"New user verified. (user id: {user_id})", db)
 
-    logger.info(f"New user verified. (user id: {user_id})")
     await update.effective_message.reply_text("Verification successful!")
 
 
@@ -156,8 +152,8 @@ async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         links = db.links
         links.insert_one({"user_id": user_id, "link": link})
+        logger.info(f"New link added. (user id: {user_id})", db)
 
-    logger.info(f"New link added. (user id: {user_id})")
     await update.effective_message.reply_text("Link added successfully.")
 
 
@@ -181,11 +177,11 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         links = db.links
         result = links.delete_one({"user_id": user_id, "link": link})
 
-    if result.deleted_count > 0:
-        logger.info(f"Link deleted. (user id: {user_id})")
-        await update.effective_message.reply_text("Link deleted successfully.")
-    else:
-        await update.effective_message.reply_text("Link not found.")
+        if result.deleted_count > 0:
+            logger.info(f"Link deleted. (user id: {user_id})", db)
+            await update.effective_message.reply_text("Link deleted successfully.")
+        else:
+            await update.effective_message.reply_text("Link not found.")
 
 
 async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -209,7 +205,8 @@ async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         random_index = random.randint(0, count - 1)
         link = links.find({"user_id": user_id}).skip(random_index).limit(1).next()
-    logger.info(f"Lucky link generated. (user id: {user_id})")
+        logger.info(f"Lucky link generated. (user id: {user_id})", db)
+
     await update.effective_message.reply_text(link["link"])
 
 
@@ -247,7 +244,10 @@ async def dedup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 result = links.delete_many({"_id": {"$in": ids_to_remove}})
                 deleted += result.deleted_count
         remaining = links.count_documents({"user_id": user_id})
-    logger.info(f"Dedup completed. Deleted {deleted} entries. Keeping {remaining} entries. (user id: {user_id})")
+        logger.info(
+            f"Dedup completed. Deleted {deleted} entries. Keeping {remaining} entries. (user id: {user_id})", db
+        )
+
     await update.effective_message.reply_text(f"Deleted duplicates: {deleted}. Remaining links: {remaining}.")
 
 
