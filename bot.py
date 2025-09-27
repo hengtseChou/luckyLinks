@@ -95,7 +95,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text("You already joined LUCKY LINKS.")
             return
         users.insert_one({"user_id": user_id, "status": "unverified"})
-        logger.info(f"New user joined. (user id: {user_id})", db)
+        logger.info(f"New user joined (user id: {user_id})", db)
 
     await update.effective_message.reply_text("Welcome to LUCKY LINKS. Please use /verify <password> to proceed.")
     await context.bot.send_message(
@@ -124,11 +124,11 @@ async def verify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         if password != PASSWORD:
             await handle_invalid_attempt(update, "failed_verification", context)
-            logger.info(f"Invalid verification occurred. (user id: {user_id})")
+            logger.info(f"Invalid verification occurred (user id: {user_id})")
             return
 
         users.update_one({"user_id": user_id}, {"$set": {"status": "verified"}})
-        logger.info(f"New user verified. (user id: {user_id})", db)
+        logger.info(f"User verified (user id: {user_id})", db)
 
     await update.effective_message.reply_text("Verification successful!")
 
@@ -152,7 +152,7 @@ async def new(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         links = db.links
         links.insert_one({"user_id": user_id, "link": link})
-        logger.info(f"New link added. (user id: {user_id})", db)
+        logger.info(f"Link added: {link} (user id: {user_id})", db)
 
     await update.effective_message.reply_text("Link added successfully.")
 
@@ -178,7 +178,7 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         result = links.delete_one({"user_id": user_id, "link": link})
 
         if result.deleted_count > 0:
-            logger.info(f"Link deleted. (user id: {user_id})", db)
+            logger.info(f"Link deleted: {link} (user id: {user_id})", db)
             await update.effective_message.reply_text("Link deleted successfully.")
         else:
             await update.effective_message.reply_text("Link not found.")
@@ -205,7 +205,7 @@ async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         random_index = random.randint(0, count - 1)
         link = links.find({"user_id": user_id}).skip(random_index).limit(1).next()
-        logger.info(f"Lucky link generated. (user id: {user_id})", db)
+        logger.info(f"Lucky link: {link} (user id: {user_id})", db)
 
     await update.effective_message.reply_text(link["link"])
 
@@ -326,10 +326,10 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
     else:
         error_message = f"🚨 *Bot Error Alert* 🚨\n\n*Exception :* `{context.error}`\n"
-    try:
-        await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode=ParseMode.MARKDOWN)
-    except TelegramError as e:
-        logger.error(f"Failed to send error report: {e}")
+
+    await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode=ParseMode.MARKDOWN)
+    with mongo_connection() as db:
+        logger.error(context.error, db)
 
 
 def main():
