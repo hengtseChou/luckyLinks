@@ -174,8 +174,8 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if link is None:
             await update.effective_message.reply_text("Please provide a link.")
             return
-        links = db.links
-        result = links.delete_one({"user_id": user_id, "link": link})
+        entries = db.links
+        result = entries.delete_one({"user_id": user_id, "link": link})
 
         if result.deleted_count > 0:
             logger.info(f"Link deleted: {link} (user id: {user_id})", db)
@@ -197,17 +197,17 @@ async def lucky(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await handle_invalid_attempt(update, "not_verified", context)
             return
 
-        links = db.links
-        count = links.count_documents({"user_id": user_id})
+        entries = db.links
+        count = entries.count_documents({"user_id": user_id})
         if count == 0:
             await update.effective_message.reply_text("You have no links saved.")
             return
 
         random_index = random.randint(0, count - 1)
-        link = links.find({"user_id": user_id}).skip(random_index).limit(1).next()
+        link = entries.find({"user_id": user_id}).skip(random_index).limit(1).next()["link"]
         logger.info(f"Lucky link: {link} (user id: {user_id})", db)
 
-    await update.effective_message.reply_text(link["link"])
+    await update.effective_message.reply_text(link)
 
 
 async def dedup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -223,7 +223,7 @@ async def dedup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await handle_invalid_attempt(update, "not_verified", context)
             return
 
-        links = db.links
+        entries = db.links
         pipeline = [
             {"$match": {"user_id": user_id}},
             {
@@ -235,18 +235,16 @@ async def dedup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             },
             {"$match": {"count": {"$gt": 1}}},
         ]
-        duplicates = links.aggregate(pipeline)
+        duplicates = entries.aggregate(pipeline)
         deleted = 0
         for dup in duplicates:
             doc_ids = dup["doc_ids"]
             ids_to_remove = doc_ids[1:]
             if ids_to_remove:
-                result = links.delete_many({"_id": {"$in": ids_to_remove}})
+                result = entries.delete_many({"_id": {"$in": ids_to_remove}})
                 deleted += result.deleted_count
-        remaining = links.count_documents({"user_id": user_id})
-        logger.info(
-            f"Dedup completed. Deleted {deleted} entries. Keeping {remaining} entries. (user id: {user_id})", db
-        )
+        remaining = entries.count_documents({"user_id": user_id})
+        logger.info(f"Dedup: {deleted} entries deleted, current count={remaining} (user id: {user_id})", db)
 
     await update.effective_message.reply_text(f"Deleted duplicates: {deleted}. Remaining links: {remaining}.")
 
@@ -269,15 +267,15 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.effective_message.reply_text("Please provide a keyword to search.")
             return
 
-        links = db.links
+        entries = db.links
         regex_pattern = re.compile(search_term, re.IGNORECASE)
-        count = links.count_documents({"user_id": user_id, "link": {"$regex": regex_pattern}})
+        count = entries.count_documents({"user_id": user_id, "link": {"$regex": regex_pattern}})
         if count == 0:
             await update.effective_message.reply_text("No matching links found.")
             return
         else:
             message = "*These links are FEELING LUCKY:* \n\n"
-            results = links.find({"user_id": user_id, "link": {"$regex": regex_pattern}})
+            results = entries.find({"user_id": user_id, "link": {"$regex": regex_pattern}})
             for doc in results:
                 message += f"• {doc['link']}\n"
             await update.effective_message.reply_text(text=message, parse_mode=ParseMode.MARKDOWN)
