@@ -327,7 +327,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     await context.bot.send_message(chat_id=DEVELOPER_CHAT_ID, text=error_message, parse_mode=ParseMode.MARKDOWN)
     with mongo_connection() as db:
-        logger.error(context.error, db)
+        logger.error(f"{context.error}", db)
 
 
 def main():
