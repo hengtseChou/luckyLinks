@@ -58,7 +58,7 @@ stream_handler.setLevel(logging.INFO)
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
-mongo_handler = MongoHandler(collection="logs")
+mongo_handler = MongoHandler()
 logger.addHandler(mongo_handler)
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
